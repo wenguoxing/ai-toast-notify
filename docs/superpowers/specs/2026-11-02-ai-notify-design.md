@@ -1,9 +1,9 @@
-# ai-toast-notify 设计文档（v1.1 修订版）
+# ai-toast-notify 设计文档（v1.2 修订版）
 
-- 日期：2026-11-02（v1.1 修订：2026-11-02）
-- 状态：已按 Review 结论修订，待用户确认后进入实现
+- 日期：2026-11-02（v1.1 修订：2026-11-02；v1.2 修订：2026-11-02）
+- 状态：v1.2 已按二次 Review 修订，待用户确认后进入实现
 - 类型：新项目（Architectural）
-- 修订说明：v1.0 有 5 处事实性错误（包名冲突 / Codex argv / StopFailure 字段 / idle_prompt / TOML 根键），并新增 Codex 新 hooks 体系接入。本版为修正后的基线。
+- 修订说明：v1.0 有 5 处事实性错误（包名冲突 / Codex argv / StopFailure 字段 / idle_prompt / TOML 根键），v1.1 新增 Codex 新 hooks 体系接入；v1.2 按二次 Review 修正 Codex 侧 4 处事实问题——**`async:true` 会被 Codex 静默跳过**、Interrupt timeout 上限 3s、hook 信任（hash）机制、事件总数 12 种（无 PreModelRequest/PostModelRequest），并统一嗅探判据与 `messagePreview` 作用域。
 
 ## 1. 概述
 
@@ -18,7 +18,7 @@
 | 包名 | **`ai-toast-notify`**（npm 上 `ai-notify` 已被 unoryota/ai-notify v0.14.9 占用且同赛道；`ai-toast-notify` 已验证可用） |
 | 通知渠道 | Windows 桌面 toast（不做手机推送/多渠道） |
 | 技术栈 | Node.js（TypeScript ESM），npm 全局安装，零运行时依赖 |
-| 进程模型 | 无守护进程，每次调用独立发通知；hook 一律 `async: true` 不阻塞宿主 |
+| 进程模型 | 无守护进程，每次调用独立发通知；Claude hook 用 `async:true` 不阻塞宿主，**Codex hook 同步执行**（Codex 会静默跳过 `async:true` 的 handler，官方明确 async 尚不支持） |
 | Claude Code 入口 | hooks（settings.json），**exec form**（`command` + `args` 数组），挂 Stop / StopFailure / Notification / PostToolUseFailure / SubagentStop |
 | Codex 入口（主） | **新 hooks 体系 `~/.codex/hooks.json`**：Stop（完成）/ Interrupt（中断）/ PermissionRequest（等待批准）/ SubagentStop（默认关）。stdin JSON，payload 与 Claude 同构（含 `hook_event_name`） |
 | Codex 入口（回退） | 旧 `notify`（config.toml）：仅 `agent-turn-complete`，**payload 走 argv 末参数（stdin 为 null）**。默认不写入；仅 `install --legacy-notify` 显式启用；与 hooks.json 路径互斥，避免双重通知 |
@@ -38,8 +38,11 @@
 - 命令 hook 支持 **exec form（`command`+`args`，无 shell、引号天然安全）与 `async: true`**；shell form 在无 Git Bash 的 Windows 走 PowerShell，纯引号串 command 会被打印而不执行（官方 "PowerShell started no program" 一节）。**本工具一律用 exec form**
 
 **B. Codex 新 hooks（openai/codex 源码 codex-rs/hooks，已核实；本机 `~/.codex/hooks.json` 已在用）**：
-- 文件 `~/.codex/hooks.json`，结构 `{ "hooks": { "<Event>": [ { "matcher"?, "hooks": [ { "type":"command", "command":"<单字符串>", "commandWindows"?, "timeout"?, "async"? } ] } ] } }`
-- 14 种事件：PreModelRequest / PostModelRequest / PreToolUse / **PermissionRequest** / PostToolUse / PreCompact / PostCompact / SessionStart / SessionEnd / UserPromptSubmit / SubagentStart / SubagentStop / **Stop** / **Interrupt**
+- 文件 `~/.codex/hooks.json`，结构 `{ "hooks": { "<Event>": [ { "matcher"?, "hooks": [ { "type":"command", "command":"<单字符串>", "commandWindows"?, "timeout"? } ] } ] } }`
+- 12 种事件：PreToolUse / **PermissionRequest** / PostToolUse / PreCompact / PostCompact / SessionStart / SessionEnd / UserPromptSubmit / SubagentStart / SubagentStop / **Stop** / **Interrupt**（v1.1 误列 14 种——PreModelRequest / PostModelRequest 不存在，已核实官方事件表）
+- ⚠️ **`async:true` 的 handler 会被 Codex 静默跳过**（官方原文："async command hooks aren't supported yet. Codex skips handlers with async: true"）→ 本工具 Codex 条目**一律不写 async**，同步执行 + 短 timeout；Claude 侧仍用 `async:true`（两家行为不同，安装器分别生成）
+- **Interrupt 事件 timeout 上限 3 秒**（官方：限 1–3 秒，含后台执行）→ Interrupt 条目 `timeout:3`，其余事件 `timeout:10`
+- **信任机制**：非托管 hook 须经用户在 Codex 内 `/hooks` 审查信任后才执行；信任按 hook 定义 **hash** 记录，定义变化（如升级后 node/cli 路径变化）即失效、**跳过直到重新信任** → install 输出提示，README 排障首条 + 升级须知
 - command 为单字符串，Windows 下经 `cmd /C "…"` 执行；**payload 以 JSON 写入 stdin**（command_runner.rs：`stdin(Stdio::piped())` + `write_all(input_json)`）
 - payload 与 Claude 同构：`session_id`/`turn_id`/`transcript_path`/`cwd`/`hook_event_name`/`model`/`permission_mode` + 事件字段。`Stop` 含 `last_assistant_message`、`background_tasks`、`session_crons`；`PermissionRequest` 含 `tool_name`/`tool_input`
 - **PermissionRequest hook 可返回 allow/deny 决策**；本工具 stdout 恒为空、exit 恒 0 = 不干预审批流
@@ -99,7 +102,8 @@
 │  ├─ Claude: ~/.claude/settings.json                   │
 │  │   5 事件 × exec form(command+args+async) hook      │
 │  ├─ Codex 主路径: ~/.codex/hooks.json（存在即优先）    │
-│  │   4 事件 × command-string hook(async)              │
+│  │   4 事件 × command-string hook（同步，无 async，   │
+│  │   需 /hooks 信任；Interrupt timeout:3）            │
 │  ├─ Codex 回退: ~/.codex/config.toml notify（默认    │
 │  │   不写入；--legacy-notify 显式启用；他人 notify 跳过）│
 │  ├─ 用户配置 ~/.ai-toast-notify/config.json           │
@@ -167,12 +171,12 @@ interface NotifyEvent {
 
 | Hook 事件 | 条件 | → kind | 默认 | 文案 |
 |---|---|---|---|---|
-| `Stop` | `background_tasks`/`session_crons` 均空 | `done` | 开 | `last_assistant_message` 截 80 字 |
+| `Stop` | `background_tasks`/`session_crons` 均空 | `done` | 开 | `last_assistant_message` 截 80 字（受 `codex.messagePreview` 控制，关闭则固定文案） |
 | `Stop` | 后台数组非空 | — | 不发 | 同 Claude 理由 |
 | `Interrupt` | — | `interrupted` | 开 | 任务被中断 |
 | `PermissionRequest` | — | `needs-input` | 开 | 等待你批准：`<tool_name>`（stdout 恒空、exit 0，不干预审批） |
 | `SubagentStop` | — | `done` | **关** | 子代理完成（filterKey=subagentStop） |
-| 其他 10 种事件 | — | — | 不挂 | v1 不订阅，防噪音 |
+| 其他 8 种事件 | — | — | 不挂 | v1 不订阅，防噪音 |
 
 **Codex 旧 notify（回退）**：
 
@@ -182,7 +186,7 @@ interface NotifyEvent {
 
 **文案规则**：标题 = 工具名 + ` · ` + cwd basename（多项目并行可区分）；kind 前缀 emoji：✅ done / ❌ error / ⏹ interrupted / 💬 needs-input（ToastGeneric 着色兼容性差，emoji 是低风险等效，README 注明）。
 
-**来源识别**：`--claude` / `--codex` flag 优先（两条安装路径各自写入）；无 flag 嗅探兜底：`type==="agent-turn-complete"` → codex 旧 notify；`hook_event_name ∈ {Interrupt, PermissionRequest}` → codex；`hook_event_name ∈ {StopFailure, Notification, PostToolUseFailure}` → claude；`Stop`/`SubagentStop` 两家同名单靠 payload 无法区分 → 需 flag，裸调用记日志静默退出。
+**来源识别**：`--claude` / `--codex` flag 优先（两条安装路径各自写入）；无 flag 嗅探兜底：`type==="agent-turn-complete"` → codex 旧 notify；`hook_event_name === "Interrupt"` → codex（**唯一确认的 Codex 独有事件**；PermissionRequest 两家都有，不作判据，否则 Claude 的 PermissionRequest 会被误标 Codex）；`hook_event_name ∈ {StopFailure, Notification, PostToolUseFailure}` → claude；`Stop`/`SubagentStop`/`PermissionRequest` 两家同名单靠 payload 无法区分 → 需 flag，裸调用记日志静默退出。
 
 ### 4.4 安装与配置
 
@@ -190,8 +194,8 @@ interface NotifyEvent {
 
 - Claude（settings.json，exec form——无 shell、无引号地狱、空格路径天然安全、async 不阻塞回合）：
   `{ "type": "command", "command": "<node.exe 绝对路径>", "args": ["<cli.js 绝对路径>", "send", "--claude"], "async": true, "timeout": 10 }`
-- Codex hooks.json（单字符串 command，经 cmd /C）：
-  `"<node.exe>" "<cli.js>" send --codex`，handler `{ "type":"command", "command":…, "timeout":10, "async":true }`
+- Codex hooks.json（单字符串 command，经 cmd /C；**无 async 字段**——`async:true` 会被 Codex 静默跳过）：
+  `"<node.exe>" "<cli.js>" send --codex`，handler `{ "type":"command", "command":…, "timeout":10 }`；Interrupt 事件用 `"timeout":3`（官方上限 3s）
 - Codex config.toml（回退）：
   `notify = ["<node>", "<cli.js>", "send", "--codex"]`（根键，插在首个 `[table]` 之前）
 
@@ -202,6 +206,7 @@ interface NotifyEvent {
 4. Codex legacy 路径：`install --legacy-notify` 先从 hooks.json 移除自有条目（保留第三方、文件不存在则 no-op），再写入 config.toml `notify`；发现他人 notify 则跳过并提示。两条 Codex 路径互斥，避免双重通知
 5. 生成默认用户配置（已存在则不动）
 6. **await** 测试 toast，当场验证链路
+7. 输出提醒：**Codex hook 须在 Codex 内运行 `/hooks` 审查并信任后才会执行**（hash 信任机制；升级后 node/cli 路径变化同样需要重新信任），未信任前 Codex 通知静默不生效
 
 **用户配置** `~/.ai-toast-notify/config.json`：
 ```json
@@ -211,6 +216,8 @@ interface NotifyEvent {
   "codex": { "messagePreview": true }
 }
 ```
+
+`codex.messagePreview` 作用于**两条 Codex 路径**（hooks 与旧 notify）：关闭后完成通知不带回复摘要，只显示固定文案。
 
 **`uninstall`**：按结构特征（args/command 含包名 + send）精确移除自有条目，逐字保留他人配置；清理 hooks.json 与 config.toml 两处；`~/.ai-toast-notify/` 目录保留（含日志）供手动删除。
 
@@ -244,6 +251,8 @@ interface NotifyEvent {
 4. **VSCode 扩展内权限提示可能不触发 Claude Notification hook**（上游 issues #56936/#55875）；终端不受影响
 5. **仅 Windows 10/11**；toast 显示在"Windows PowerShell"应用名下，系统设置关闭 PS 通知会全部静默
 6. **无跨进程去重**：多窗口同 cwd 短时多次事件会各弹各的（方案 B 演进项）
+7. **Codex hook 信任机制**：新增/变更（含升级后路径变化）的 hook 在用户于 Codex 内 `/hooks` 信任前被静默跳过——install 会提示；"Codex 装了没通知"首先查这里
+8. **Codex Interrupt 通知可能被 3s 上限截断**：Interrupt hook timeout 上限 3 秒，慢机器上 toast（spawn PowerShell，自身上限 5s）可能未完成即被 Codex 终止——偶发丢中断通知，日志可查
 
 ## 7. 未来演进（不在 v1）
 
