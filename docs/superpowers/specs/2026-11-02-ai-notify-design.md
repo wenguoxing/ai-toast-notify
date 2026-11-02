@@ -100,8 +100,8 @@
 │  │   5 事件 × exec form(command+args+async) hook      │
 │  ├─ Codex 主路径: ~/.codex/hooks.json（存在即优先）    │
 │  │   4 事件 × command-string hook(async)              │
-  ├─ Codex 回退: ~/.codex/config.toml notify（默认     │
-  │   不写入；--legacy-notify 显式启用；他人 notify 跳过）│
+│  ├─ Codex 回退: ~/.codex/config.toml notify（默认    │
+│  │   不写入；--legacy-notify 显式启用；他人 notify 跳过）│
 │  ├─ 用户配置 ~/.ai-toast-notify/config.json           │
 │  └─ await 测试 toast（当场验证链路）                    │
 └──────────────────────────────────────────────────────┘
@@ -119,7 +119,7 @@ npm 包内模块（单包，TypeScript ESM，零运行时依赖）：
 | 模块 | 职责 |
 |---|---|
 | `src/cli.ts` | 命令入口：`install`/`uninstall`/`send`/`test`；send 流水线；永远 exit 0 |
-| `src/stdin.ts` | stdin 读取（3s 超时）；argv 末参数 JSON 提取 |
+| `src/input.ts` | stdin 读取（3s 超时）；argv 末参数 JSON 提取 |
 | `src/adapters/claude.ts` | Claude hook payload → NotifyEvent（字段名按官方文档修正） |
 | `src/adapters/codex.ts` | Codex hooks payload + 旧 notify payload → NotifyEvent |
 | `src/adapters/detect.ts` | 来源识别（--claude/--codex 优先，payload 特征嗅探兜底） |
