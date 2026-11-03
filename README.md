@@ -115,7 +115,7 @@ ai-toast-notify uninstall
 
 ```powershell
 npm install
-npm test        # 111 个用例
+npm test        # 124 个用例
 npm run build   # dist/
 ```
 
