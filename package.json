@@ -3,6 +3,8 @@
   "version": "0.1.0",
   "description": "Windows toast notifications for Claude Code & Codex task events",
   "type": "module",
+  "license": "MIT",
+  "keywords": ["claude-code", "codex", "windows", "toast", "notification", "hooks"],
   "bin": { "ai-toast-notify": "dist/cli.js" },
   "engines": { "node": ">=18" },
   "files": ["dist"],

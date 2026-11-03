@@ -6,7 +6,8 @@ const spawnMock = vi.fn()
 vi.mock('node:child_process', () => ({ spawn: (...args: unknown[]) => spawnMock(...args) }))
 
 import {
-  escapeXml, buildToastArgs, sendToast, POWERSHELL_EXE, TOAST_TIMEOUT_MS,
+  escapeXml, buildToastArgs, sendToast, POWERSHELL_EXE,
+  TOAST_TIMEOUT_INTERRUPTED_MS, TOAST_TIMEOUT_DEFAULT_MS,
 } from '../src/notify/toast.js'
 
 const evt: NotifyEvent = {
@@ -18,8 +19,9 @@ const evt: NotifyEvent = {
 beforeEach(() => spawnMock.mockReset())
 
 describe('toast 后端', () => {
-  it('TOAST_TIMEOUT_MS === 2500（必须低于 Codex Interrupt 3s 宿主上限）', () => {
-    expect(TOAST_TIMEOUT_MS).toBe(2500)
+  it('interrupted 路径 2500ms（低于 Codex Interrupt 3s 宿主上限）；其余 8000ms（低于宿主 10s）', () => {
+    expect(TOAST_TIMEOUT_INTERRUPTED_MS).toBe(2500)
+    expect(TOAST_TIMEOUT_DEFAULT_MS).toBe(8000)
   })
 
   it('escapeXml 转义 & < > " 且中文/emoji 原样', () => {

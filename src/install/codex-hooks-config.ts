@@ -1,6 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { PKG_NAME } from '../types.js'
 
 /** 我们挂接的 Codex hook 事件（spec 4.3；SessionEnd 不订阅） */
 export const CODEX_HOOK_EVENTS = ['Stop', 'Interrupt', 'PermissionRequest', 'PostModelRequest', 'SubagentStop'] as const
@@ -27,14 +26,14 @@ export function buildCodexHookEntry(cliJsPath: string, event: string): HookEntry
   }
 }
 
-/** 按结构识别自有 hook：command 含包名与 'send --codex'（路径升级 / sync→async 定义变化也能识别） */
+/** 按结构识别自有 hook：command 以 'send --codex' 结尾且以 node 启动。
+ * 不依赖安装路径含包名（npm link 指向任意目录名也能识别/卸载/幂等，Task 13 真机验收修订；
+ * 兼容 v1.3 带引号 / 任意 node 路径旧定义的清理）。 */
 export function isAiNotifyCodexHook(h: unknown): boolean {
   if (typeof h !== 'object' || h === null) return false
   const e = h as HookEntry
-  return e.type === 'command'
-    && typeof e.command === 'string'
-    && e.command.includes(PKG_NAME)
-    && e.command.includes('send --codex')
+  if (e.type !== 'command' || typeof e.command !== 'string') return false
+  return /\bsend\s+--codex$/.test(e.command)
 }
 
 export function mergeCodexHooks(

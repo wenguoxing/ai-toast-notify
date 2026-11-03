@@ -225,7 +225,7 @@ interface NotifyEvent {
 
 核心原则：**通知工具永远不能干扰宿主工作流**。
 
-- `send`：输入获取（argv → stdin 3s）→ 解析 → toast（2.5s，低于 Codex Interrupt 3s 上限）全程 try/catch，任何异常记日志 + exit 0；stdout 恒空（Codex PermissionRequest 不会误读为决策）
+- `send`：输入获取（argv → stdin 3s）→ 解析 → toast（interrupted 2.5s 低于 Codex Interrupt 3s 宿主上限；其余事件 8s 低于宿主 10s——v1.4 执行期真机修订）全程 try/catch，任何异常记日志 + exit 0；stdout 恒空（Codex PermissionRequest 不会误读为决策）
 - 配置损坏 → 内置默认值，不丢通知
 - 写配置前备份（`.bak.<时间戳>`）；解析失败中止不写
 - 日志 `~/.ai-toast-notify/log.txt` 一行/事件（时间/来源/kind/结果），1MB 轮转，永不抛错

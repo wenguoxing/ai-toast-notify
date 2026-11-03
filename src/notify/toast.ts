@@ -2,7 +2,10 @@ import { spawn } from 'node:child_process'
 import type { NotifyEvent } from '../types.js'
 
 export const POWERSHELL_EXE = 'powershell.exe'
-export const TOAST_TIMEOUT_MS = 2500 // 低于 Codex Interrupt 3s 宿主上限
+/** interrupted（Codex Interrupt，宿主硬上限 3s）：2500ms 内必须完成，极慢机器可能丢通知（已知限制 #8） */
+export const TOAST_TIMEOUT_INTERRUPTED_MS = 2500
+/** 其余事件（宿主 timeout 10s）：本机实测 PowerShell+WinRT 需 2.7–3.2s，2500ms 会全灭（Task 13 验收修订） */
+export const TOAST_TIMEOUT_DEFAULT_MS = 8000
 
 /** 系统 PowerShell 开始菜单快捷方式 AUMID（soulee-dev / TianqiZhang 同款，Win10/11 稳定存在） */
 const APP_ID = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe'
@@ -39,7 +42,8 @@ export function buildToastArgs(event: NotifyEvent, opts: { sound: boolean }): st
 export function sendToast(event: NotifyEvent, opts: { sound: boolean }): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(POWERSHELL_EXE, buildToastArgs(event, opts), {
-      timeout: TOAST_TIMEOUT_MS, windowsHide: true,
+      timeout: event.kind === 'interrupted' ? TOAST_TIMEOUT_INTERRUPTED_MS : TOAST_TIMEOUT_DEFAULT_MS,
+      windowsHide: true,
     })
     child.on('error', reject)
     child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`powershell exited with ${code}`))))

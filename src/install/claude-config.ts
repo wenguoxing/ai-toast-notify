@@ -1,6 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { PKG_NAME } from '../types.js'
 import { CLAUDE_HOOK_EVENTS } from './events.js'
 
 export { CLAUDE_HOOK_EVENTS }
@@ -24,14 +23,14 @@ export function buildClaudeHookEntry(nodePath: string, cliJsPath: string): HookE
   }
 }
 
-/** 按结构识别自有 hook：args 含包名与 'send'（路径升级变化也能识别，不做字符串全等比对） */
+/** 按结构识别自有 hook：args 末尾恰为 ['send','--claude']。
+ * 不依赖安装路径含包名（npm link 指向任意目录名也能识别/卸载/幂等，Task 13 真机验收修订）。 */
 export function isAiNotifyClaudeHook(h: unknown): boolean {
   if (typeof h !== 'object' || h === null) return false
   const e = h as HookEntry
-  return e.type === 'command'
-    && Array.isArray(e.args)
-    && e.args.some((a) => typeof a === 'string' && a.includes(PKG_NAME))
-    && e.args.includes('send')
+  if (e.type !== 'command' || !Array.isArray(e.args) || e.args.length < 3) return false
+  const a = e.args as unknown[]
+  return a[a.length - 2] === 'send' && a[a.length - 1] === '--claude'
 }
 
 export function mergeClaudeHooks(

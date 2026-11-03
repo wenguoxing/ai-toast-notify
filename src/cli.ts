@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseClaudeEvent, type ClaudeHookInput } from './adapters/claude.js'
@@ -173,7 +173,15 @@ async function main(): Promise<void> {
   }
 }
 
-// 直接执行守卫（npm bin / node dist/cli.js 时运行 main；被 import 时不运行）
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  void main()
+// 直接执行守卫（npm bin / node dist/cli.js 时运行 main；被 import 时不运行）。
+// npm link 下 argv[1] 是符号链接路径，而 Node 模块解析会 realpath import.meta.url，必须两侧都 realpath 再比对。
+function isDirectRun(): boolean {
+  if (!process.argv[1]) return false
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href
+  } catch {
+    return false
+  }
 }
+
+if (isDirectRun()) void main()
