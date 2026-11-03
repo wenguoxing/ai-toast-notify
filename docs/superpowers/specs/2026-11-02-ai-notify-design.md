@@ -258,6 +258,8 @@ interface NotifyEvent {
 
 11. **Codex 短会话可能不执行 async hook**：真机复验发现少于约 1000 tokens 的"秒回"会话中 PostModelRequest async hook 完全未启动，长会话正常；短会话的模型失败通知可能丢失。该实验只直接覆盖 PostModelRequest，不应外推为所有事件的完整调度结论。
 
+12. **TOML 文本级解析限制**：legacy `config.toml` 只识别单行 notify；多行 notify 拒绝写入，其他多行数组与 table 边界不做完整 TOML 语义解析，异常形态依赖写前备份与手动整理。
+
 ## 7. 未来演进（不在 v1）
 
 - 方案 B 守护进程/状态文件：跨进程去重、合并、静音时段、minDurationSeconds（短任务不打扰，anotifier 已验证价值）

@@ -96,6 +96,7 @@ ai-toast-notify uninstall
 8. **Interrupt 通知在本机当前环境必现不可用**：Interrupt async hook 的宿主 timeout 是 1–3 秒硬上限，且 async 不豁免硬杀；本机 PowerShell+WinRT 实测完整耗时 2.6–4.1 秒，interrupted 2500ms 路径 5/5 超时，done 8000ms 路径 3/3 成功。因此该工具不能在这类机器上承诺 Interrupt toast。其余事件宿主上限 10 秒，内部上限 8 秒。
 9. **Codex 版本基线**：以 codex-cli 0.166.0 实测为准，旧版行为可能不同。
 10. **Codex Windows command 形态限制**：command 首个 token 必须是裸可执行名（靠 PATH）——依赖 `node` 在 PATH；cli.js 路径含空白时 install 会自动降级 legacy notify。卸载按 `send --codex` 调用结构识别，理论上会删除采用完全相同调用约定的第三方工具。
+12. **TOML 多行数组不做语义解析**：Codex legacy `config.toml` 只识别单行 notify；多行 notify 会拒绝写入，其他多行数组与 table 的文本级边界判断是已知限制。写入前会生成 `.bak.*`，异常形态请先手动整理。
 11. **Codex 短会话可能不执行 async hook**：真机复验发现约少于 1000 tokens 的秒回会话中 PostModelRequest async hook 完全未启动，长会话正常；短会话模型失败通知可能丢失。该实验只直接覆盖 PostModelRequest，不应外推为所有事件的完整调度结论。
 
 ## 排障
