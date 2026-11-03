@@ -1,0 +1,9 @@
+{
+  "session_id": "a1b2c3",
+  "cwd": "C:\\Users\\u\\proj",
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": { "command": "npm test" },
+  "error": "The user doesn't want to proceed with this tool use. The user doesn't want to proceed with this tool use.",
+  "is_interrupt": true
+}

@@ -1,0 +1,11 @@
+{
+  "session_id": "a1b2c3",
+  "cwd": "C:\\Users\\u\\proj",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "后台测试已启动",
+  "background_tasks": [
+    { "id": "t1", "type": "shell", "status": "running", "command": "npm test" }
+  ],
+  "session_crons": []
+}

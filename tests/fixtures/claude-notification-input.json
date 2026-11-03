@@ -1,0 +1,7 @@
+{
+  "session_id": "a1b2c3",
+  "cwd": "C:\\Users\\u\\proj",
+  "hook_event_name": "Notification",
+  "message": "Claude is waiting for your input",
+  "notification_type": "agent_needs_input"
+}

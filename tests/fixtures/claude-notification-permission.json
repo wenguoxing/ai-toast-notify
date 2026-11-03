@@ -1,0 +1,7 @@
+{
+  "session_id": "a1b2c3",
+  "cwd": "C:\\Users\\u\\proj",
+  "hook_event_name": "Notification",
+  "message": "Claude needs your permission to use Bash",
+  "notification_type": "permission_prompt"
+}

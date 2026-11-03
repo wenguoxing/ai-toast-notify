@@ -1,0 +1,8 @@
+{
+  "session_id": "a1b2c3",
+  "transcript_path": "C:\\Users\\u\\.claude\\projects\\p\\a1b2c3.jsonl",
+  "cwd": "C:\\Users\\u\\proj",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "重构完成，3 个文件已更新，测试全部通过。"
+}
