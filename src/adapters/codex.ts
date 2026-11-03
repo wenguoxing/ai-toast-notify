@@ -32,7 +32,7 @@ export function parseCodexHookEvent(
 ): NotifyEvent | null {
   const cwd = typeof input.cwd === 'string' && input.cwd ? input.cwd : fallbackCwd
   const title = `Codex · ${cwd ? basename(cwd) : '未知目录'}`
-  const preview = (s?: string | null, fallback: string) =>
+  const preview = (s: string | null | undefined, fallback: string) =>
     opts.messagePreview ? (trim(s) ?? fallback) : fallback
 
   switch (input.hook_event_name) {

@@ -1,4 +1,5 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { PKG_NAME } from '../types.js'
 
 /** 我们挂接的 Codex hook 事件（spec 4.3；SessionEnd 不订阅） */
@@ -86,6 +87,7 @@ export function installCodexHooksConfig(path: string, cliJsPath: string): void {
   }
   const merged = mergeCodexHooks(file, cliJsPath)
   if (existsSync(path)) copyFileSync(path, `${path}.bak.${backupSuffix()}`)
+  mkdirSync(dirname(path), { recursive: true }) // 全新机器 ~/.codex 可能不存在
   writeFileSync(path, JSON.stringify(merged, null, 2) + '\n')
 }
 

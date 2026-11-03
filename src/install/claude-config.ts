@@ -1,4 +1,5 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { PKG_NAME } from '../types.js'
 import { CLAUDE_HOOK_EVENTS } from './events.js'
 
@@ -85,6 +86,7 @@ export function installClaudeConfig(settingsPath: string, nodePath: string, cliJ
   }
   const merged = mergeClaudeHooks(settings, nodePath, cliJsPath)
   if (existsSync(settingsPath)) copyFileSync(settingsPath, `${settingsPath}.bak.${backupSuffix()}`)
+  mkdirSync(dirname(settingsPath), { recursive: true }) // 全新机器 ~/.claude 可能不存在
   writeFileSync(settingsPath, JSON.stringify(merged, null, 2) + '\n')
 }
 

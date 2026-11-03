@@ -1,4 +1,5 @@
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { PKG_NAME } from '../types.js'
 
 const NOTIFY_LINE = /^notify\s*=\s*\[[^\[\]\n]*\]\s*$/m // [^...] 不含换行：多行数组形态不匹配 → 走下方抛错分支
@@ -55,6 +56,7 @@ export function installCodexConfig(
   const { text, skipped } = mergeCodexNotify(tomlText, nodePath, cliJsPath)
   if (skipped) return { skipped: true } // 他人 notify：不写、不备份
   if (existsSync(path)) copyFileSync(path, `${path}.bak.${backupSuffix()}`)
+  mkdirSync(dirname(path), { recursive: true }) // 全新机器 ~/.codex 可能不存在
   writeFileSync(path, text)
   return { skipped: false }
 }
