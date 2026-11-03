@@ -60,6 +60,33 @@ describe('mergeCodexNotify', () => {
     expect(out.text).toBe(toml)
   })
 
+  it('第三方数组末尾在 send --codex 后还有参数 → 不识别为自有，install/remove 均保持原文', () => {
+    const toml = 'notify = ["node", "relay.js", "send", "--codex", "--team=dev"]\n\n[projects]\n'
+    expect(mergeCodexNotify(toml, NODE, CLI).skipped).toBe(true)
+    expect(mergeCodexNotify(toml, NODE, CLI).text).toBe(toml)
+    expect(removeCodexNotify(toml)).toBe(toml)
+  })
+
+  it('table 内的他人 notify 不是根键 → 不阻止安装，根 notify 插到 table 前', () => {
+    const toml = 'model = "gpt-5"\n\n[tasks]\nnotify = ["python", "C:/x/x.py"]\n'
+    const out = mergeCodexNotify(toml, NODE, CLI)
+    expect(out.skipped).toBe(false)
+    expect(out.text.indexOf('notify = ')).toBeLessThan(out.text.indexOf('[tasks]'))
+    expect(out.text).toContain('notify = ["python", "C:/x/x.py"]')
+  })
+
+  it('table 内即使出现自有形态 notify → 原样保留，同时在根级别新增 notify', () => {
+    const tableNotify = 'notify = ["node", "C:/old/ai-toast-notify/dist/cli.js", "send", "--codex"]'
+    const toml = `model = "gpt-5"\n\n[tasks]\n${tableNotify}\n`
+    const out = mergeCodexNotify(toml, NODE, CLI)
+    expect(out.skipped).toBe(false)
+    expect(out.text).toContain(tableNotify)
+    expect(out.text.slice(0, out.text.indexOf('[tasks]'))).toMatch(/^\s*notify\s*=/m)
+    // uninstall 只清理根级自有条目，table 内第三方/同名形态不动
+    const cleaned = removeCodexNotify(out.text)
+    expect(cleaned).toContain(tableNotify)
+    expect(cleaned.slice(0, cleaned.indexOf('[tasks]'))).not.toMatch(/^\s*notify\s*=/m)
+  })
   it('缩进的合法根键 notify → 识别并替换，不追加重复根键', () => {
     const toml = 'model = "gpt-5"\n  notify = ["python", "C:/old/ai-toast-notify/x.py", "send", "--codex"]\n\n[projects]\n'
     const out = mergeCodexNotify(toml, NODE, CLI)
