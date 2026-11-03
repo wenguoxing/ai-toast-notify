@@ -13,7 +13,9 @@ import { appendLog } from './log.js'
 import { loadConfig, saveConfig } from './config.js'
 import { sendToast } from './notify/toast.js'
 import { installClaudeConfig, uninstallClaudeConfig } from './install/claude-config.js'
-import { installCodexHooksConfig, uninstallCodexHooksConfig } from './install/codex-hooks-config.js'
+import {
+  installCodexHooksConfig, uninstallCodexHooksConfig, isCodexHooksPathSupported,
+} from './install/codex-hooks-config.js'
 import { installCodexConfig, uninstallCodexConfig } from './install/codex-config.js'
 import { DEFAULT_CONFIG, type NotifyEvent, type UserConfig } from './types.js'
 
@@ -87,9 +89,13 @@ export async function runSend(argv: string[], deps: SendDeps): Promise<void> {
 // ---------- install / uninstall / test ----------
 
 export async function runInstall(options: { legacyNotify?: boolean; cliJsPath?: string } = {}): Promise<void> {
-  const legacyNotify = options.legacyNotify === true
+  const requestedLegacyNotify = options.legacyNotify === true
   const node = process.execPath
   const cli = options.cliJsPath ?? cliJsPath()
+  const legacyNotify = requestedLegacyNotify || !isCodexHooksPathSupported(cli)
+  if (!requestedLegacyNotify && legacyNotify) {
+    console.warn('\u26a0 cli.js \u8def\u5f84\u5305\u542b\u7a7a\u767d\u5b57\u7b26\uff0cCodex hooks command \u4f1a\u5931\u8d25\uff1b\u5df2\u964d\u7ea7\u5199\u5165 config.toml legacy notify\uff1a' + cli)
+  }
   installClaudeConfig(claudeSettingsPath(), node, cli)
   console.log(`✓ Claude Code hooks 已写入 ${claudeSettingsPath()}（exec form + async）`)
 

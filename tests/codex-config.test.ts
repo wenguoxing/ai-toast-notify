@@ -9,6 +9,7 @@ import {
 
 const NODE = 'C:\\Program Files\\nodejs\\node.exe'
 const CLI = 'C:\\Users\\u\\AppData\\Roaming\\npm\\node_modules\\ai-toast-notify\\dist\\cli.js'
+const CLI_LINK = 'C:\\dev\\ai-notify\\dist\\cli.js' // npm link：路径不含包名，也不能被误判为他人
 
 describe('buildNotifyValue / toTomlArray', () => {
   it('buildNotifyValue 生成数组形态', () => {
@@ -45,6 +46,13 @@ describe('mergeCodexNotify', () => {
     expect(third.text).toBe(second.text)
   })
 
+  it('npm link 路径不含包名 → 仍按 send --codex 结构识别为自有条目', () => {
+    const first = mergeCodexNotify('', NODE, CLI_LINK).text
+    const second = mergeCodexNotify(first, NODE, CLI).text
+    expect(second.match(/^\s*notify\s*=/gm)).toHaveLength(1)
+    expect(second).toContain(toTomlArray(buildNotifyValue(NODE, CLI)))
+    expect(removeCodexNotify(first)).not.toMatch(/^\s*notify\s*=/m)
+  })
   it('已有他人 notify（python/x.py）→ 返回原文不变 + skipped', () => {
     const toml = 'notify = ["python", "C:/x/x.py"]\n\n[projects]\n'
     const out = mergeCodexNotify(toml, NODE, CLI)
@@ -52,6 +60,13 @@ describe('mergeCodexNotify', () => {
     expect(out.text).toBe(toml)
   })
 
+  it('缩进的合法根键 notify → 识别并替换，不追加重复根键', () => {
+    const toml = 'model = "gpt-5"\n  notify = ["python", "C:/old/ai-toast-notify/x.py", "send", "--codex"]\n\n[projects]\n'
+    const out = mergeCodexNotify(toml, NODE, CLI)
+    expect(out.skipped).toBe(false)
+    expect(out.text.match(/^\s*notify\s*=/gm)).toHaveLength(1)
+    expect(out.text).toContain(toTomlArray(buildNotifyValue(NODE, CLI)))
+  })
   it('多行 notify → 抛错', () => {
     const toml = 'notify = [\n  "python",\n  "C:/x/x.py"\n]\n'
     expect(() => mergeCodexNotify(toml, NODE, CLI)).toThrow('手动处理')

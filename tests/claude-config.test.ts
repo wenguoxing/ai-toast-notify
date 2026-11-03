@@ -44,6 +44,14 @@ describe('mergeClaudeHooks', () => {
     expect(hooks.PreToolUse).toHaveLength(1)
   })
 
+  it('第三方组缺 hooks 数组 → 不抛 TypeError，原组保留且追加自有组', () => {
+    const settings = { hooks: { Stop: [{ matcher: 'third-party' }] } }
+    const out = mergeClaudeHooks(settings, NODE, CLI)
+    const hooks = out.hooks as Record<string, Array<{ matcher?: string; hooks?: unknown[] }>>
+    expect(hooks.Stop).toHaveLength(2)
+    expect(hooks.Stop[0]).toEqual({ matcher: 'third-party' })
+    expect(hooks.Stop[1].hooks).toHaveLength(1)
+  })
   it('幂等：merge 两遍结果相同（不产生重复组）', () => {
     const once = mergeClaudeHooks({}, NODE, CLI)
     expect(mergeClaudeHooks(JSON.parse(JSON.stringify(once)), NODE, CLI)).toEqual(once)
@@ -71,6 +79,11 @@ describe('removeClaudeHooks / uninstallClaudeConfig', () => {
     expect(hooks.StopFailure).toBeUndefined()
   })
 
+  it('remove 遇第三方组缺 hooks 数组 → 不抛 TypeError 且原组保留', () => {
+    const settings = { hooks: { Stop: [{ matcher: 'third-party' }] } }
+    const out = removeClaudeHooks(settings)
+    expect(out.hooks?.Stop).toEqual([{ matcher: 'third-party' }])
+  })
   it('全部为自有条目时连 hooks 键一起清掉', () => {
     expect(removeClaudeHooks(mergeClaudeHooks({}, NODE, CLI)).hooks).toBeUndefined()
   })

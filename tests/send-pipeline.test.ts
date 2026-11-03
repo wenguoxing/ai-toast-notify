@@ -185,6 +185,18 @@ describe('runInstall 铁律', () => {
     expect(existsSync(claudeSettingsPath())).toBe(true)
   })
 
+  it('cli.js 路径含空格 → 默认 install 不写必失败的 Codex hooks，降级 legacy notify 并警告', async () => {
+    const cli = join(dir, 'Users', 'John Doe', 'ai-toast-notify', 'dist', 'cli.js')
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await runInstall({ legacyNotify: false, cliJsPath: cli })
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('空白'))
+      expect(existsSync(codexHooksPath())).toBe(false)
+      expect(readFileSync(codexConfigPath(), 'utf8')).toContain('John Doe')
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
   it('install --legacy-notify 移除自有 hooks、保留 orca、写入 config.toml', async () => {
     const cli = join(dir, 'apps', 'ai-toast-notify', 'dist', 'cli.js')
     await runInstall({ legacyNotify: false, cliJsPath: cli }) // 先默认安装（含自有 hooks）

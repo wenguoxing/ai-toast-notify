@@ -81,21 +81,22 @@ ai-toast-notify uninstall
 ## 接入方式（原理）
 
 - **Claude Code**：exec form（`command` + `args` 数组，无 shell），空格路径天然安全，`async:true` 不阻塞回合。
-- **Codex hooks.json**：单字符串 command `node <cli.js> send --codex`——**裸 `node` 名靠 PATH 解析**（codex-cli 0.166.0 Windows 实测：exe 带路径或加引号一律 `hook: Failed`）；cli.js 路径不含空格（npm 全局与 nvm 默认满足）。
+- **Codex hooks.json**：单字符串 command `node <cli.js> send --codex`——**裸 `node` 名靠 PATH 解析**（codex-cli 0.166.0 Windows 实测：exe 带路径或加引号一律 `hook: Failed`）；cli.js 路径不能含空白，install 检测到空白路径会警告并自动降级到旧 notify。
 - **Codex 旧 notify**：payload 追加为 argv 末参数（stdin 为 null），本项目 `send` 自动识别。
 
 ## 已知限制（如实告知）
 
-1. **Claude Esc 中断不可靠捕获**：用户按 Esc 取消运行中工具不触发 `PostToolUseFailure`（官方机制，取消走 tool result）；仅 `is_interrupt:true` 的 abort 形态可捕获。Codex 侧 `Interrupt` 事件可正常捕获。
+1. **Claude Esc 中断不可靠捕获**：用户按 Esc 取消运行中工具不触发 `PostToolUseFailure`（官方机制，取消走 tool result）；仅 `is_interrupt:true` 的 abort 形态可捕获。Codex `Interrupt` 事件会受到第 8 条硬时限约束。
 2. **Codex 模型请求失败以 PostModelRequest 为准**：仅 `status:"failed"` 发通知；completed/cancelled 忽略。同回合多次失败可能多次提醒；该事件每次模型请求都会启动 helper，非 failed 状态在 toast 前直接返回。
 3. **Codex 旧 notify 大 payload 静默失效**：长会话 `input-messages` 超 argv 上限时上游不调用 notify（issue #18309/#34878）；hooks.json 路径走 stdin 不受影响。
 4. **VSCode 扩展内权限提示可能不触发 Claude Notification hook**（上游 issues #56936/#55875）；终端不受影响。
 5. **仅 Windows 10/11**；toast 归属"Windows PowerShell"应用名，系统设置关闭 PS 通知会全部静默。
 6. **无跨进程去重**：多窗口同 cwd 短时多次事件各弹各的。
 7. **Codex hook 信任机制**：定义变化（含升级后路径变化）后未重新信任会被静默跳过。
-8. **Interrupt 通知可能被 3s 上限截断**：Interrupt hook 宿主超时上限 3 秒，本工具内部上限降为 2.5 秒；PowerShell 冷启动极慢的机器仍可能偶发丢通知（日志可查）。其余事件宿主上限 10 秒，内部上限 8 秒。
+8. **Interrupt 通知在本机当前环境必现不可用**：Interrupt async hook 的宿主 timeout 是 1–3 秒硬上限，且 async 不豁免硬杀；本机 PowerShell+WinRT 实测完整耗时 2.6–4.1 秒，interrupted 2500ms 路径 5/5 超时，done 8000ms 路径 3/3 成功。因此该工具不能在这类机器上承诺 Interrupt toast。其余事件宿主上限 10 秒，内部上限 8 秒。
 9. **Codex 版本基线**：以 codex-cli 0.166.0 实测为准，旧版行为可能不同。
-10. **Codex Windows command 形态限制**：command 首个 token 必须是裸可执行名（靠 PATH）——依赖 `node` 在 PATH；cli.js 路径含空格时无解（Codex 侧限制）。
+10. **Codex Windows command 形态限制**：command 首个 token 必须是裸可执行名（靠 PATH）——依赖 `node` 在 PATH；cli.js 路径含空白时 install 会自动降级 legacy notify。卸载按 `send --codex` 调用结构识别，理论上会删除采用完全相同调用约定的第三方工具。
+11. **Codex 短会话可能不执行 async hook**：真机复验发现约少于 1000 tokens 的秒回会话中 PostModelRequest async hook 完全未启动，长会话正常；短会话模型失败通知可能丢失。该实验只直接覆盖 PostModelRequest，不应外推为所有事件的完整调度结论。
 
 ## 排障
 

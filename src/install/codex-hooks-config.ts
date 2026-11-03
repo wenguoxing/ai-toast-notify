@@ -9,10 +9,14 @@ interface HookEntry {
   command?: string
   [k: string]: unknown
 }
-interface HookGroup { matcher?: string; hooks: HookEntry[] }
+interface HookGroup { matcher?: string; hooks?: HookEntry[] }
 type HooksMap = Record<string, HookGroup[]>
 
 /** 0.166.0 Windows 实测：首个 token 必须是裸可执行名（node 靠 PATH），路径不加引号、须无空格 */
+export function isCodexHooksPathSupported(cliJsPath: string): boolean {
+  return !/\s/u.test(cliJsPath)
+}
+
 export function buildCodexCommand(cliJsPath: string): string {
   return `node ${cliJsPath} send --codex`
 }
@@ -45,8 +49,10 @@ export function mergeCodexHooks(
   for (const ev of CODEX_HOOK_EVENTS) {
     const groups = (hooks[ev] ?? []) as HookGroup[]
     // 先剔除旧的自有条目（升级换路径 / sync→async 定义变化），再追加新组
-    for (const g of groups) g.hooks = g.hooks.filter((h) => !isAiNotifyCodexHook(h))
-    const cleaned = groups.filter((g) => g.hooks.length > 0)
+    for (const g of groups) {
+      if (Array.isArray(g.hooks)) g.hooks = g.hooks.filter((h) => !isAiNotifyCodexHook(h))
+    }
+    const cleaned = groups.filter((g) => !Array.isArray(g.hooks) || g.hooks.length > 0)
     cleaned.push({ hooks: [buildCodexHookEntry(cliJsPath, ev)] })
     hooks[ev] = cleaned
   }
@@ -60,8 +66,10 @@ export function removeCodexHooks(file: Record<string, unknown>): Record<string, 
   if (!hooks) return out
   for (const ev of Object.keys(hooks)) {
     const groups = hooks[ev] ?? []
-    for (const g of groups) g.hooks = g.hooks.filter((h) => !isAiNotifyCodexHook(h))
-    const cleaned = groups.filter((g) => g.hooks.length > 0)
+    for (const g of groups) {
+      if (Array.isArray(g.hooks)) g.hooks = g.hooks.filter((h) => !isAiNotifyCodexHook(h))
+    }
+    const cleaned = groups.filter((g) => !Array.isArray(g.hooks) || g.hooks.length > 0)
     if (cleaned.length > 0) hooks[ev] = cleaned
     else delete hooks[ev]
   }
@@ -76,6 +84,9 @@ function backupSuffix(d = new Date()): string {
 }
 
 export function installCodexHooksConfig(path: string, cliJsPath: string): void {
+  if (!isCodexHooksPathSupported(cliJsPath)) {
+    throw new Error('cli.js \u8def\u5f84\u5305\u542b\u7a7a\u767d\u5b57\u7b26\uff0cCodex hooks command \u65e0\u6cd5\u53ef\u9760\u751f\u6210')
+  }
   let file: Record<string, unknown>
   try {
     file = existsSync(path)

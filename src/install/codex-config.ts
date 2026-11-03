@@ -1,8 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { PKG_NAME } from '../types.js'
 
-const NOTIFY_LINE = /^notify\s*=\s*\[[^\[\]\n]*\]\s*$/m // [^...] 不含换行：多行数组形态不匹配 → 走下方抛错分支
+const NOTIFY_LINE = /^\s*notify\s*=\s*\[[^\[\]\n]*\]\s*$/m // [^...] 不含换行：多行数组形态不匹配 → 走下方抛错分支
 
 export function buildNotifyValue(nodePath: string, cliJsPath: string): string[] {
   return [nodePath, cliJsPath, 'send', '--codex']
@@ -20,10 +19,10 @@ export function mergeCodexNotify(
   const line = `notify = ${toTomlArray(buildNotifyValue(nodePath, cliJsPath))}`
   const m = tomlText.match(NOTIFY_LINE)
   if (m) {
-    if (m[0].includes(PKG_NAME)) return { text: tomlText.replace(NOTIFY_LINE, line), skipped: false } // 自有 → 替换
+    if (isAiNotifyNotifyLine(m[0])) return { text: tomlText.replace(NOTIFY_LINE, line), skipped: false } // 自有 → 替换
     return { text: tomlText, skipped: true }                                            // 他人 → 跳过不覆盖
   }
-  if (/^notify\s*=/m.test(tomlText))
+  if (/^\s*notify\s*=/m.test(tomlText))
     throw new Error('config.toml 已有 notify 键但不是可识别的单行数组形态，请手动处理')
 
   const tableIdx = tomlText.search(/^\s*\[/m) // 首个 [table]：根键必须插在它之前
@@ -36,10 +35,14 @@ export function mergeCodexNotify(
   return { text: `${head}\n${line}\n\n${tail}`, skipped: false }
 }
 
-/** 仅当 notify 行含本包名才删除；他人 notify 原样保留 */
+/** Own notify entries are identified by send --codex, not by path/package name. */
+function isAiNotifyNotifyLine(line: string): boolean {
+  return line.includes('"send"') && line.includes('"--codex"')
+}
+
 export function removeCodexNotify(tomlText: string): string {
   const m = tomlText.match(NOTIFY_LINE)
-  if (m && m[0].includes(PKG_NAME)) return tomlText.replace(NOTIFY_LINE, '')
+  if (m && isAiNotifyNotifyLine(m[0])) return tomlText.replace(NOTIFY_LINE, '')
   return tomlText
 }
 

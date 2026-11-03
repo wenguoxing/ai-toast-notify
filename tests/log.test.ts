@@ -16,6 +16,11 @@ describe('appendLog', () => {
     expect(text).toBe('2026-11-02T10:00:00Z claude-code done ok\n')
   })
 
+  it('目录不存在 → 自动创建日志目录并写入（手动配置 hooks 未跑 install 时日志不丢）', () => {
+    const nested = join(dir, 'ai-toast-notify')
+    appendLog(nested, 'manual hook line')
+    expect(readFileSync(join(nested, 'log.txt'), 'utf8')).toBe('manual hook line\n')
+  })
   it('文件超过 1MB 时轮转为 log.txt.old', () => {
     const big = 'x'.repeat(1024 * 1024 + 10)
     writeFileSync(join(dir, 'log.txt'), big)
