@@ -57,11 +57,12 @@ export function parseClaudeEvent(input: ClaudeHookInput): NotifyEvent | null {
       const message = input.message ?? ''
       if (type === 'permission_prompt' || (!type && /permission/i.test(message)))
         return { source: 'claude-code', kind: 'needs-input', title, cwd, detail: '等待你批准工具调用' }
-      // Legacy idle text can also contain waiting-for-input; classify idle first
-      // so the configurable idlePing filter cannot be bypassed.
-      if (type === 'idle_prompt' || type === 'idle_ping' || (!type && /idle/i.test(message)))
+      // The historical no-type idle text is "Claude is waiting for your input";
+      // classify it as idle so the configurable idlePing filter remains effective.
+      if (type === 'idle_prompt' || type === 'idle_ping'
+        || (!type && /idle|waiting for your input/i.test(message)))
         return { source: 'claude-code', kind: 'needs-input', title, cwd, detail: '空闲提醒', filterKey: 'idlePing' }
-      if (type === 'agent_needs_input' || (!type && /waiting for your input/i.test(message)))
+      if (type === 'agent_needs_input')
         return { source: 'claude-code', kind: 'needs-input', title, cwd, detail: '在等你输入' }
       // 未知类型兜底 needs-input：Claude 未来新增权限类事件绝不静默漏报（anotifier 同策略）
       return { source: 'claude-code', kind: 'needs-input', title, cwd,

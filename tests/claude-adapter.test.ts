@@ -48,16 +48,17 @@ describe('parseClaudeEvent', () => {
     expect(e!.detail).toBe('等待你批准工具调用')
   })
 
-  it('Notification 无 type 按 message 嗅探 waiting for your input → needs-input', () => {
-    const { notification_type: _drop, ...rest } = fx('claude-notification-input.json')
-    const e = parseClaudeEvent(rest)
+  it('Notification agent_needs_input → needs-input 且不受 idle 过滤', () => {
+    const e = parseClaudeEvent(fx('claude-notification-input.json'))
     expect(e!.kind).toBe('needs-input')
+    expect(e!.filterKey).toBeUndefined()
     expect(e!.detail).toBe('在等你输入')
   })
 
-  it('Notification 无 type 且 idle 历史文案同时含 waiting for your input → 先识别 idle 并保留 filterKey', () => {
+  it('Notification 无 type 且真实历史文案 waiting for your input → 归 idle 并保留 filterKey', () => {
     const { notification_type: _drop, ...rest } = fx('claude-notification-idle.json')
-    const e = parseClaudeEvent({ ...rest, message: 'Claude is idle - waiting for your input' })
+    const e = parseClaudeEvent(rest)
+    expect(e!.kind).toBe('needs-input')
     expect(e!.filterKey).toBe('idlePing')
     expect(e!.detail).toBe('空闲提醒')
   })

@@ -1,9 +1,9 @@
-# ai-toast-notify 设计文档（v1.5 修订版）
+# ai-toast-notify 设计文档（v1.6 修订版）
 
-- 日期：2026-11-02（v1.1–v1.4 修订：2026-11-02；v1.5 代码 Review 修订：2026-11-03）
-- 状态：v1.5 已实现；v1.5 吸收项目组代码 Review 与真机复验结论
+- 日期：2026-11-02（v1.1–v1.4 修订：2026-11-02；v1.5–v1.6 代码 Review 修订：2026-11-03）
+- 状态：v1.6 已实现；v1.5–v1.6 吸收项目组代码 Review、复审与真机复验结论
 - 类型：新项目（Architectural）
-- 修订说明：v1.1 新增 Codex 新 hooks 体系；v1.2 保留 Interrupt timeout、hook 信任、来源歧义与 `messagePreview` 修正；v1.3 修正 v1.2 的 3 处事实误差——Codex 0.166.0 支持 async command hooks（仅 SessionEnd 强制同步）、事件总数为 14（含 Pre/PostModelRequest）、Codex Stop payload 无 `background_tasks`/`session_crons`，并新增 `PostModelRequest failed` 作为 Codex 异常通知入口；v1.4 经隔离 CODEX_HOME 真机会话 + codex.exe 二进制字符串双重实证确认 v1.3 全部事实主张（async、14 事件、closed schema、PascalCase `hook_event_name`、payload 走 stdin），并修正 Windows 下 command 形态——**0.166.0 实测 command 首个 token 必须是裸可执行名（靠 PATH 解析），exe 带路径或引号一律 `hook: Failed`**，产品模板改为 `node <cli.js> send --codex`。v1.5 吸收 Review 结论：修复 npm link 下 legacy 结构识别、无 type idle 嗅探顺序、Codex 空格路径降级、缺 hooks 数组守卫、日志目录创建与缩进 TOML 根键识别，并如实更新运行时限制。
+- 修订说明：v1.1 新增 Codex 新 hooks 体系；v1.2 保留 Interrupt timeout、hook 信任、来源歧义与 `messagePreview` 修正；v1.3 修正 v1.2 的 3 处事实误差——Codex 0.166.0 支持 async command hooks（仅 SessionEnd 强制同步）、事件总数为 14（含 Pre/PostModelRequest）、Codex Stop payload 无 `background_tasks`/`session_crons`，并新增 `PostModelRequest failed` 作为 Codex 异常通知入口；v1.4 经隔离 CODEX_HOME 真机会话 + codex.exe 二进制字符串双重实证确认 v1.3 全部事实主张（async、14 事件、closed schema、PascalCase `hook_event_name`、payload 走 stdin），并修正 Windows 下 command 形态——**0.166.0 实测 command 首个 token 必须是裸可执行名（靠 PATH 解析），exe 带路径或引号一律 `hook: Failed`**，产品模板改为 `node <cli.js> send --codex`。v1.5 吸收 Review 结论：修复 npm link 下 legacy 结构识别、无 type idle 嗅探顺序、Codex 空格路径降级、缺 hooks 数组守卫、日志目录创建与缩进 TOML 根键识别，并如实更新运行时限制。v1.6 复审修正：legacy notify 自有识别改为 `send --codex` 尾部锚定，TOML 根键识别限定在首个 table 之前，无 type 的历史 waiting-for-input 文案归入 idle 过滤。
 
 ## 1. 概述
 
@@ -130,7 +130,7 @@ npm 包内模块（单包，TypeScript ESM，零运行时依赖）：
 | `src/notify/toast.ts` | spawn PowerShell 调 WinRT；XML 转义；interrupted 2500ms、其余 8000ms 分级超时 |
 | `src/install/claude-config.ts` | settings.json 幂等合并（exec form，只增删自有条目） |
 | `src/install/codex-hooks-config.ts` | hooks.json 幂等合并（保留 orca 等第三方条目） |
-| `src/install/codex-config.ts` | config.toml 旧 notify 增量修改（根键插到首个 table 前；他人 notify 跳过） |
+| `src/install/codex-config.ts` | config.toml 旧 notify 增量修改（仅在首个 table 前识别/修改根键；自有条目按 `send --codex` 数组尾部锚定） |
 | `src/config.ts` | 用户配置读写，损坏回退默认 |
 | `src/log.ts` | 追加日志，1MB 轮转，永不抛错 |
 
@@ -161,6 +161,7 @@ interface NotifyEvent {
 | `StopFailure` | — | `error` | 开 | `出错停止：<error>`，有 `error_details` 则括号附加 |
 | `Notification` | `permission_prompt` | `needs-input` | 开 | 等待你批准工具调用 |
 | `Notification` | `agent_needs_input` | `needs-input` | 开 | 在等你输入 |
+| `Notification` | 无 type 且历史文案 `waiting for your input` | `needs-input` | **关** | 空闲提醒（filterKey=idlePing） |
 | `Notification` | `idle_prompt`（兼容 idle_ping） | `needs-input` | **关** | 空闲提醒（filterKey=idlePing） |
 | `Notification` | **未知类型**（未来新增） | `needs-input` | 开 | 兜底展示 message / 原始 type——权限类事件绝不静默漏报 |
 | `PostToolUseFailure` | `is_interrupt===true` | `interrupted` | 开 | 工具以中断方式结束（注意：用户 Esc 取消运行中工具不触发此 hook，README 如实说明） |
