@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/Administrator/.orca/agent-hooks/codex-hook.cmd",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/Administrator/.orca/agent-hooks/codex-hook.cmd",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "shell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/Administrator/.orca/agent-hooks/codex-hook.cmd",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
