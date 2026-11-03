@@ -1,9 +1,9 @@
-# ai-toast-notify 设计文档（v1.4 修订版）
+# ai-toast-notify 设计文档（v1.5 修订版）
 
-- 日期：2026-11-02（v1.1 修订：2026-11-02；v1.2 修订：2026-11-02；v1.3 修订：2026-11-02；v1.4 修订：2026-11-02）
-- 状态：v1.4 已按本机 Codex 0.166.0 真机会话实测复核，待进入实现
+- 日期：2026-11-02（v1.1–v1.4 修订：2026-11-02；v1.5 代码 Review 修订：2026-11-03）
+- 状态：v1.5 已实现；v1.5 吸收项目组代码 Review 与真机复验结论
 - 类型：新项目（Architectural）
-- 修订说明：v1.1 新增 Codex 新 hooks 体系；v1.2 保留 Interrupt timeout、hook 信任、来源歧义与 `messagePreview` 修正；v1.3 修正 v1.2 的 3 处事实误差——Codex 0.166.0 支持 async command hooks（仅 SessionEnd 强制同步）、事件总数为 14（含 Pre/PostModelRequest）、Codex Stop payload 无 `background_tasks`/`session_crons`，并新增 `PostModelRequest failed` 作为 Codex 异常通知入口；v1.4 经隔离 CODEX_HOME 真机会话 + codex.exe 二进制字符串双重实证确认 v1.3 全部事实主张（async、14 事件、closed schema、PascalCase `hook_event_name`、payload 走 stdin），并修正 Windows 下 command 形态——**0.166.0 实测 command 首个 token 必须是裸可执行名（靠 PATH 解析），exe 带路径或引号一律 `hook: Failed`**，产品模板改为 `node <cli.js> send --codex`。
+- 修订说明：v1.1 新增 Codex 新 hooks 体系；v1.2 保留 Interrupt timeout、hook 信任、来源歧义与 `messagePreview` 修正；v1.3 修正 v1.2 的 3 处事实误差——Codex 0.166.0 支持 async command hooks（仅 SessionEnd 强制同步）、事件总数为 14（含 Pre/PostModelRequest）、Codex Stop payload 无 `background_tasks`/`session_crons`，并新增 `PostModelRequest failed` 作为 Codex 异常通知入口；v1.4 经隔离 CODEX_HOME 真机会话 + codex.exe 二进制字符串双重实证确认 v1.3 全部事实主张（async、14 事件、closed schema、PascalCase `hook_event_name`、payload 走 stdin），并修正 Windows 下 command 形态——**0.166.0 实测 command 首个 token 必须是裸可执行名（靠 PATH 解析），exe 带路径或引号一律 `hook: Failed`**，产品模板改为 `node <cli.js> send --codex`。v1.5 吸收 Review 结论：修复 npm link 下 legacy 结构识别、无 type idle 嗅探顺序、Codex 空格路径降级、缺 hooks 数组守卫、日志目录创建与缩进 TOML 根键识别，并如实更新运行时限制。
 
 ## 1. 概述
 
@@ -127,7 +127,7 @@ npm 包内模块（单包，TypeScript ESM，零运行时依赖）：
 | `src/adapters/claude.ts` | Claude hook payload → NotifyEvent（字段名按官方文档修正） |
 | `src/adapters/codex.ts` | Codex hooks payload + 旧 notify payload → NotifyEvent |
 | `src/adapters/detect.ts` | 来源识别（--claude/--codex 优先，payload 特征嗅探兜底） |
-| `src/notify/toast.ts` | spawn PowerShell 调 WinRT；XML 转义；2.5s 超时（低于 Codex Interrupt 3s 上限） |
+| `src/notify/toast.ts` | spawn PowerShell 调 WinRT；XML 转义；interrupted 2500ms、其余 8000ms 分级超时 |
 | `src/install/claude-config.ts` | settings.json 幂等合并（exec form，只增删自有条目） |
 | `src/install/codex-hooks-config.ts` | hooks.json 幂等合并（保留 orca 等第三方条目） |
 | `src/install/codex-config.ts` | config.toml 旧 notify 增量修改（根键插到首个 table 前；他人 notify 跳过） |
@@ -195,14 +195,14 @@ interface NotifyEvent {
 - Claude（settings.json，exec form——无 shell、无引号地狱、空格路径天然安全、async 不阻塞回合）：
   `{ "type": "command", "command": "<node.exe 绝对路径>", "args": ["<cli.js 绝对路径>", "send", "--claude"], "async": true, "timeout": 10 }`
 - Codex hooks.json（单字符串 command；async 不阻塞宿主）：
-  `node <cli.js> send --codex`（**裸 `node` 名靠 PATH 解析，路径不加引号**——0.166.0 Windows 实测 exe 带路径/引号一律 Failed；cli.js 路径须无空格，npm 全局默认满足），handler `{ "type":"command", "command":…, "async":true, "timeout":10 }`；Interrupt 事件用 `{ "async":true, "timeout":3 }`（1–3 秒上限）
+  `node <cli.js> send --codex`（**裸 `node` 名靠 PATH 解析，路径不加引号**——0.166.0 Windows 实测 exe 带路径/引号一律 Failed；cli.js 路径须无空白；install 检测到空白路径时拒绝写 hooks 并自动降级 legacy notify），handler `{ "type":"command", "command":…, "async":true, "timeout":10 }`；Interrupt 事件用 `{ "async":true, "timeout":3 }`（1–3 秒上限）
 - Codex config.toml（回退）：
   `notify = ["<node>", "<cli.js>", "send", "--codex"]`（根键，插在首个 `[table]` 之前）
 
 **`install` 行为**：
 1. 定位 `process.execPath` 与自身 cli.js 绝对路径
 2. Claude settings.json：读 → 解析（失败中止不写）→ 合并（只追加/替换自有 exec-form 条目）→ 备份 → 写回；幂等
-3. Codex 默认路径：**hooks.json 存在 → 合并 5 事件**（保留 orca 等全部第三方条目与 matcher）；**hooks.json 不存在 → 创建仅含自有条目的文件**；默认不触碰 config.toml。仅当 hooks.json 解析失败时提示手动处理，**绝不覆盖他人 notify**
+3. Codex 默认路径：先检测 cli.js 路径是否含空白；含空白时打印警告并走 legacy 降级。无空白时 **hooks.json 存在 → 合并 5 事件**（保留 orca 等全部第三方条目与 matcher，第三方组缺 hooks 数组时按空组保留不崩溃）；**hooks.json 不存在 → 创建仅含自有条目的文件**；默认不触碰 config.toml。hooks.json 解析失败时提示手动处理，**绝不覆盖他人 notify**
 4. Codex legacy 路径：`install --legacy-notify` 先从 hooks.json 移除自有条目（保留第三方、文件不存在则 no-op），再写入 config.toml `notify`；发现他人 notify 则跳过并提示。两条 Codex 路径互斥，避免双重通知
 5. 生成默认用户配置（已存在则不动）
 6. **await** 测试 toast，当场验证链路
@@ -219,7 +219,7 @@ interface NotifyEvent {
 
 `codex.messagePreview` 作用于**两条 Codex 路径**（hooks 与旧 notify）：关闭后完成通知不带回复摘要，只显示固定文案。
 
-**`uninstall`**：按结构特征（args/command 含包名 + send）精确移除自有条目，逐字保留他人配置；清理 hooks.json 与 config.toml 两处；`~/.ai-toast-notify/` 目录保留（含日志）供手动删除。
+**`uninstall`**：按结构特征（Claude `args` 末尾为 `send --claude`；Codex `command` 末尾为 `send --codex`）精确移除自有条目，逐字保留他人配置；清理 hooks.json 与 config.toml 两处；`~/.ai-toast-notify/` 目录保留（含日志）供手动删除。
 
 ### 4.5 错误处理
 
@@ -238,7 +238,7 @@ interface NotifyEvent {
 |---|---|
 | 单测（vitest） | Claude adapter：真实形态 fixture（Stop 含/不含后台任务、StopFailure `error` 字段、permission/idle_prompt/agent_needs_input/未知类型兜底、is_interrupt、SubagentStop） |
 | 单测 | Codex adapter：hooks payload（Stop/Interrupt/PermissionRequest/SubagentStop/PostModelRequest failed/completed/cancelled）+ 旧 notify argv payload（`input-messages` 为字符串数组）；明确断言 Codex Stop 不依赖后台字段 |
-| 单测 | 三个 installer：幂等（跑两遍不变）、Claude 空格路径（exec form 天然安全）、Codex 裸名 command 形态、**保留第三方条目（用本机 orca hooks.json 样本）**、TOML 根键插到首个 table 前、他人 notify 跳过 |
+| 单测 | 三个 installer：幂等（跑两遍不变）、Claude 空格路径（exec form 天然安全）、Codex 裸名 command 形态、**保留第三方条目（用本机 orca hooks.json 样本）**、TOML 根键插到首个 table 前、他人 notify 跳过、npm link legacy 结构识别、缺 hooks 数组守卫、空白路径降级、缩进 TOML 根键与日志目录自动创建 |
 | 单测 | 输入层：stdin 超时/坏 JSON/空、argv 末参数 JSON 提取 |
 | mock | `child_process.spawn` 断言 PowerShell 参数与 XML 转义（`& < > " '`、中文、emoji） |
 | 手动验收 | 真机 Windows：test → install → 幂等重装 → Claude/Codex 各跑小任务 → 中断/权限场景 → 卸载（详见计划 Task 13） |
@@ -252,9 +252,11 @@ interface NotifyEvent {
 5. **仅 Windows 10/11**；toast 显示在"Windows PowerShell"应用名下，系统设置关闭 PS 通知会全部静默
 6. **无跨进程去重**：多窗口同 cwd 短时多次事件会各弹各的（方案 B 演进项）
 7. **Codex hook 信任机制**：新增/变更（含升级后路径变化）的 hook 在用户于 Codex 内 `/hooks` 信任前被静默跳过——install 会提示；"Codex 装了没通知"首先查这里
-8. **Codex Interrupt 通知可能被 3s 上限截断**：Interrupt hook timeout 上限 3 秒，慢机器上 spawn PowerShell 可能未完成即被 Codex 终止——toast 内部超时降为 2.5 秒，但极慢机器仍可能偶发丢通知，日志可查
+8. **Codex Interrupt 通知在本机当前环境必现不可用**：Interrupt async hook 的宿主 timeout 是 1–3 秒硬上限，且 async 不豁免硬杀；实测 PowerShell+WinRT 完整耗时 2.6–4.1 秒，interrupted 内部 2500ms 路径 5/5 超时，done 8000ms toast 路径 3/3 成功。因此不能宣称"极慢机器偶发"，在同类机器上 Interrupt toast 物理上不可达；非 Interrupt 事件的 10s hook 上限与 8000ms 内部超时不受该实验影响
 9. **Codex 版本基线**：PostModelRequest 与 async command hooks 以本机 0.166.0 源码为准；旧版 Codex 行为可能不同，README 要求先运行 `codex --version`
-10. **Codex Windows command 形态限制**：0.166.0 实测 command 首个 token 必须是裸可执行名（靠 PATH）——依赖 `node` 在用户 PATH（npx/npm 分发前提下成立）；cli.js 装到含空格路径的环境无解（Codex 侧限制，npm 全局与 nvm 默认路径均无空格）。"Codex hook 全部 Failed"排障时先 `where node` 确认 PATH
+10. **Codex Windows command 形态限制**：0.166.0 实测 command 首个 token 必须是裸可执行名（靠 PATH）——依赖 `node` 在用户 PATH（npx/npm 分发前提下成立）；cli.js 装到含空白路径时不能写 Codex hooks（单字符串 command 无法可靠表达）；install 会警告并自动降级 legacy notify。卸载按 `send --codex` 结构识别，理论上会删除采用完全相同调用约定的第三方工具。"Codex hook 全部 Failed"排障时先 `where node` 确认 PATH
+
+11. **Codex 短会话可能不执行 async hook**：真机复验发现少于约 1000 tokens 的"秒回"会话中 PostModelRequest async hook 完全未启动，长会话正常；短会话的模型失败通知可能丢失。该实验只直接覆盖 PostModelRequest，不应外推为所有事件的完整调度结论。
 
 ## 7. 未来演进（不在 v1）
 

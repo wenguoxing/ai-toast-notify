@@ -55,6 +55,12 @@ describe('parseClaudeEvent', () => {
     expect(e!.detail).toBe('在等你输入')
   })
 
+  it('Notification 无 type 且 idle 历史文案同时含 waiting for your input → 先识别 idle 并保留 filterKey', () => {
+    const { notification_type: _drop, ...rest } = fx('claude-notification-idle.json')
+    const e = parseClaudeEvent({ ...rest, message: 'Claude is idle - waiting for your input' })
+    expect(e!.filterKey).toBe('idlePing')
+    expect(e!.detail).toBe('空闲提醒')
+  })
   it('Notification idle_prompt → filterKey=idlePing（由 send 层按配置丢弃）', () => {
     const e = parseClaudeEvent(fx('claude-notification-idle.json'))
     expect(e!.kind).toBe('needs-input')

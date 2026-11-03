@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync, mkdtempSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  buildCodexCommand, buildCodexHookEntry, isAiNotifyCodexHook,
+  buildCodexCommand, buildCodexHookEntry, isAiNotifyCodexHook, isCodexHooksPathSupported,
   mergeCodexHooks, removeCodexHooks, installCodexHooksConfig, uninstallCodexHooksConfig,
 } from '../src/install/codex-hooks-config.js'
 
@@ -75,6 +75,14 @@ describe('mergeCodexHooks', () => {
     expect(isAiNotifyCodexHook({ type: 'command', command: 'C:/Users/Administrator/.orca/agent-hooks/codex-hook.cmd' })).toBe(false)
   })
 
+  it('第三方组缺 hooks 数组 → 不抛 TypeError，原组保留且追加自有组', () => {
+    const file = { hooks: { Stop: [{ matcher: 'third-party' }] } }
+    const out = mergeCodexHooks(file, CLI)
+    const hooks = out.hooks as Record<string, Array<{ matcher?: string; hooks?: unknown[] }>>
+    expect(hooks.Stop).toHaveLength(2)
+    expect(hooks.Stop[0]).toEqual({ matcher: 'third-party' })
+    expect(hooks.Stop[1].hooks).toHaveLength(1)
+  })
   it('remove：自有组移除、orca 组保留、空事件键与顶层 hooks 键清理', () => {
     const merged = mergeCodexHooks(orca(), CLI)
     const out = removeCodexHooks(merged)
@@ -99,6 +107,11 @@ describe('installCodexHooksConfig / uninstallCodexHooksConfig', () => {
     expect(existsSync(path())).toBe(false)
   })
 
+  it('remove 遇第三方组缺 hooks 数组 → 不抛 TypeError 且原组保留', () => {
+    const file = { hooks: { Stop: [{ matcher: 'third-party' }] } }
+    const out = removeCodexHooks(file)
+    expect((out.hooks as Record<string, unknown[]>).Stop).toEqual([{ matcher: 'third-party' }])
+  })
   it('解析失败（坏 JSON）→ 抛错且不写', () => {
     dir = mkdtempSync(join(tmpdir(), 'ai-toast-notify-hooks-'))
     writeFileSync(path(), '{bad json')
@@ -107,6 +120,15 @@ describe('installCodexHooksConfig / uninstallCodexHooksConfig', () => {
     expect(readFileSync(path(), 'utf8')).toBe(before) // 原文未动
   })
 
+  it('cli.js 路径含空白 → install 前置拒绝且原文件保持不变', () => {
+    dir = mkdtempSync(join(tmpdir(), 'ai-toast-notify-hooks-'))
+    const before = '{ "description": "kept" }\n'
+    writeFileSync(path(), before)
+    expect(isCodexHooksPathSupported('C:\\Users\\John Doe\\ai-toast-notify\\dist\\cli.js')).toBe(false)
+    expect(() => installCodexHooksConfig(path(), 'C:\\Users\\John Doe\\ai-toast-notify\\dist\\cli.js'))
+      .toThrow('cli.js 路径包含空白字符')
+    expect(readFileSync(path(), 'utf8')).toBe(before)
+  })
   it('install 写入后与 orca 共存且保留未知顶层键（description）', () => {
     dir = mkdtempSync(join(tmpdir(), 'ai-toast-notify-hooks-'))
     writeFileSync(path(), JSON.stringify({ ...orca(), description: 'kept' }))

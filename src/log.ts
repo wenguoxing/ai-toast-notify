@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, rmSync, renameSync, statSync } from 'node:fs'
+import { appendFileSync, existsSync, mkdirSync, rmSync, renameSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 
 const MAX_BYTES = 1024 * 1024
@@ -7,6 +7,7 @@ const MAX_BYTES = 1024 * 1024
 export function appendLog(dir: string, line: string): void {
   const file = join(dir, 'log.txt')
   try {
+    mkdirSync(dir, { recursive: true }) // Keep log evidence even before install creates the data directory
     if (existsSync(file) && statSync(file).size > MAX_BYTES) {
       const old = join(dir, 'log.txt.old')
       if (existsSync(old)) rmSync(old) // Windows 上 renameSync 目标已存在会报错，先删旧 .old

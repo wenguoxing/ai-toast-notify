@@ -10,7 +10,7 @@ interface HookEntry {
   args?: string[]
   [k: string]: unknown
 }
-interface HookGroup { matcher?: string; hooks: HookEntry[] }
+interface HookGroup { matcher?: string; hooks?: HookEntry[] }
 type HooksMap = Record<string, HookGroup[]>
 
 export function buildClaudeHookEntry(nodePath: string, cliJsPath: string): HookEntry {
@@ -44,8 +44,10 @@ export function mergeClaudeHooks(
   for (const ev of CLAUDE_HOOK_EVENTS) {
     const groups = (hooks[ev] ?? []) as HookGroup[]
     // 先剔除旧的自有条目（升级换路径场景），再追加新组
-    for (const g of groups) g.hooks = g.hooks.filter((h) => !isAiNotifyClaudeHook(h))
-    const cleaned = groups.filter((g) => g.hooks.length > 0)
+    for (const g of groups) {
+      if (Array.isArray(g.hooks)) g.hooks = g.hooks.filter((h) => !isAiNotifyClaudeHook(h))
+    }
+    const cleaned = groups.filter((g) => !Array.isArray(g.hooks) || g.hooks.length > 0)
     cleaned.push({ matcher: '', hooks: [entry] })
     hooks[ev] = cleaned
   }
@@ -59,8 +61,10 @@ export function removeClaudeHooks(settings: Record<string, unknown>): Record<str
   if (!hooks) return out
   for (const ev of Object.keys(hooks)) {
     const groups = hooks[ev] ?? []
-    for (const g of groups) g.hooks = g.hooks.filter((h) => !isAiNotifyClaudeHook(h))
-    const cleaned = groups.filter((g) => g.hooks.length > 0)
+    for (const g of groups) {
+      if (Array.isArray(g.hooks)) g.hooks = g.hooks.filter((h) => !isAiNotifyClaudeHook(h))
+    }
+    const cleaned = groups.filter((g) => !Array.isArray(g.hooks) || g.hooks.length > 0)
     if (cleaned.length > 0) hooks[ev] = cleaned
     else delete hooks[ev]
   }
