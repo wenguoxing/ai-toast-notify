@@ -1,0 +1,6 @@
+{
+  "session_id": "b5f6c1c2", "turn_id": "12345", "transcript_path": null,
+  "cwd": "C:\\work\\my-app", "hook_event_name": "PermissionRequest",
+  "model": "gpt-5.2-codex", "permission_mode": "default", "tool_name": "shell",
+  "tool_input": { "command": ["npm", "test"] }
+}

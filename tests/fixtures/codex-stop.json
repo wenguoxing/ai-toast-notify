@@ -1,0 +1,11 @@
+{
+  "session_id": "b5f6c1c2-1111-2222-3333-444455556666",
+  "turn_id": "12345",
+  "transcript_path": null,
+  "cwd": "C:\\work\\my-app",
+  "hook_event_name": "Stop",
+  "model": "gpt-5.2-codex",
+  "permission_mode": "acceptEdits",
+  "stop_hook_active": false,
+  "last_assistant_message": "重构完成，共修改 3 个文件，测试通过。"
+}

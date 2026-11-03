@@ -1,0 +1,6 @@
+{
+  "session_id": "b5f6c1c2", "turn_id": "12345", "transcript_path": null,
+  "cwd": "C:\\work\\my-app", "hook_event_name": "PostModelRequest",
+  "model": "gpt-5.2-codex", "status": "failed",
+  "error": "rate limit exceeded", "token_usage": null
+}

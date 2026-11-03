@@ -1,0 +1,8 @@
+{
+  "session_id": "b5f6c1c2", "turn_id": "12345", "transcript_path": null,
+  "cwd": "C:\\work\\my-app", "hook_event_name": "SubagentStop",
+  "model": "gpt-5.2-codex", "permission_mode": "acceptEdits",
+  "stop_hook_active": false, "agent_id": "agent-7",
+  "agent_type": "general-purpose", "agent_transcript_path": null,
+  "last_assistant_message": "子代理检索完成，找到 2 个候选实现。"
+}
